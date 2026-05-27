@@ -1,0 +1,4 @@
+# Only needed for the `sync` command (Google Sheets mirror).
+# The rest of the CLI works with no third-party dependencies.
+gspread>=6.0.0
+google-auth>=2.0.0
