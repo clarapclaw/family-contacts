@@ -28,6 +28,15 @@ from .store import SHEET_HEADERS, Contact
 
 SHEET_TITLE = "Peaslee Family Contacts"
 
+# A spreadsheet created by a service account lives in the service account's own
+# Drive and is invisible in a human's Drive UI. We must explicitly share it with
+# the family (as editors) so they can open it in a browser.
+DEFAULT_SHARE_WITH = [
+    "clara@peaslee.co",
+    "carl@peaslee.co",
+    "sarah@peaslee.co",
+]
+
 # Scopes needed to create and edit a spreadsheet and find it in Drive.
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -77,26 +86,30 @@ def _open_client(credentials_path: str):
     return gspread.authorize(creds)
 
 
-def _get_or_create_spreadsheet(client, share_with: Optional[str]):
+def _get_or_create_spreadsheet(client, share_with: Optional[List[str]]):
     """Open the spreadsheet by title, creating and sharing it if needed."""
     try:
         return client.open(SHEET_TITLE)
     except Exception:
         spreadsheet = client.create(SHEET_TITLE)
-        # A service account owns files it creates; share with a human so the
-        # family can actually open the sheet in their browser.
-        if share_with:
-            try:
-                spreadsheet.share(share_with, perm_type="user", role="writer")
-            except Exception:
-                pass
+        # A service account owns files it creates; share with the family so they
+        # can actually open the sheet in their browser. Don't send notification
+        # emails. Sharing failures are surfaced (not silently swallowed) because
+        # an unshared sheet is effectively invisible to the family.
+        for email in share_with or []:
+            spreadsheet.share(
+                email,
+                perm_type="user",
+                role="writer",
+                notify=False,
+            )
         return spreadsheet
 
 
 def push(
     contacts: List[Contact],
     credentials_path: Optional[str] = None,
-    share_with: Optional[str] = "clara@peaslee.co",
+    share_with: Optional[List[str]] = None,
 ) -> str:
     """Push contacts to the Google Sheet. Returns the spreadsheet URL.
 
@@ -111,6 +124,9 @@ def push(
             "GOOGLE_SHEETS_CREDENTIALS environment variable. See the README\n"
             "section 'Enabling Google Sheet sync' for setup steps."
         )
+
+    if share_with is None:
+        share_with = DEFAULT_SHARE_WITH
 
     client = _open_client(cred_path)
     spreadsheet = _get_or_create_spreadsheet(client, share_with)
